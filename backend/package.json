@@ -1,7 +1,7 @@
 {
-  "name": "mentora-backend",
+  "name": "mentora-hub-backend",
   "version": "1.0.0",
-  "description": "Plataforma de Mentoria — Backend API (TCC ADS 2026)",
+  "description": "Mentora Hub — Plataforma de Mentoria com Dashboard Analítico (TCC ADS 2026)",
   "author": "Jhamesson Henriky Amancio",
   "private": true,
   "license": "MIT",
