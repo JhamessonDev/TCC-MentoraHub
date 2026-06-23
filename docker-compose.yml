@@ -1,0 +1,67 @@
+# ================================================
+# MENTORA — Stack de desenvolvimento completa
+# ================================================
+# Sobe: MySQL + Elasticsearch + Kibana
+# Uso:  docker-compose up -d
+# Kibana: http://localhost:5601
+# MySQL:  localhost:3306
+# ================================================
+
+services:
+
+  # ── Banco de Dados ──────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: mentora_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_pass
+      MYSQL_DATABASE: mentora_db
+      MYSQL_USER: mentora_user
+      MYSQL_PASSWORD: mentora_pass
+    ports:
+      - '3306:3306'
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/src/database/migrations/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Elasticsearch (armazenamento de logs) ───
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: mentora_elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false   # desativado para dev
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - '9200:9200'
+    volumes:
+      - elastic_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://localhost:9200 || exit 1']
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # ── Kibana (visualização de logs) ───────────
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: mentora_kibana
+    restart: unless-stopped
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - '5601:5601'
+
+volumes:
+  mysql_data:
+  elastic_data:
