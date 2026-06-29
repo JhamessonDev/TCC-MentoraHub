@@ -62,4 +62,51 @@ export class SessoesService {
       .orderBy('s.data_hora', 'DESC')
       .getMany();
   }
+
+  async getMetricas(periodo: string) {
+    const dias = parseInt(periodo);
+
+    const evolucaoRaw = await this.sessaoRepo
+      .createQueryBuilder('s')
+      .select('DATE(s.data_hora)', 'data')
+      .addSelect('COUNT(*)', 'sessoes')
+      .addSelect('COALESCE(SUM(s.valor), 0)', 'receita')
+      .where('s.data_hora >= DATE_SUB(NOW(), INTERVAL :dias DAY)', { dias })
+      .groupBy('DATE(s.data_hora)')
+      .orderBy('DATE(s.data_hora)', 'ASC')
+      .getRawMany();
+
+    const totalAtual = await this.sessaoRepo
+      .createQueryBuilder('s')
+      .select('COUNT(*)', 'count')
+      .addSelect('COALESCE(SUM(s.valor), 0)', 'receita')
+      .where('s.data_hora >= DATE_SUB(NOW(), INTERVAL :dias DAY)', { dias })
+      .getRawOne();
+
+    const totalAnterior = await this.sessaoRepo
+      .createQueryBuilder('s')
+      .select('COUNT(*)', 'count')
+      .where('s.data_hora >= DATE_SUB(NOW(), INTERVAL :diasDuplo DAY)', { diasDuplo: dias * 2 })
+      .andWhere('s.data_hora < DATE_SUB(NOW(), INTERVAL :dias DAY)', { dias })
+      .getRawOne();
+
+    const totalSessoesPeriodo = parseInt(totalAtual.count);
+    const totalReceitaPeriodo = parseFloat(totalAtual.receita);
+    const sessoesAnterior     = parseInt(totalAnterior.count);
+
+    const comparativoAnterior = sessoesAnterior > 0
+      ? Math.round(((totalSessoesPeriodo - sessoesAnterior) / sessoesAnterior) * 10000) / 100
+      : totalSessoesPeriodo > 0 ? 100 : 0;
+
+    return {
+      evolucaoSessoes: evolucaoRaw.map(r => ({
+        data:    r.data instanceof Date ? r.data.toISOString().split('T')[0] : String(r.data),
+        sessoes: parseInt(r.sessoes),
+        receita: parseFloat(r.receita),
+      })),
+      totalSessoesPeriodo,
+      totalReceitaPeriodo,
+      comparativoAnterior,
+    };
+  }
 }
