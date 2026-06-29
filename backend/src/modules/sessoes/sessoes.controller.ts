@@ -1,11 +1,11 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { SessoesService } from './sessoes.service';
-import { CreateSessaoDto } from './dto/sessao.dto';
+import { CancelarSessaoDto, CreateSessaoDto } from './dto/sessao.dto';
 import { QueryMetricasDto } from './dto/metricas.dto';
 
 @ApiTags('Sessoes')
@@ -47,6 +47,21 @@ export class SessoesController {
   ) {
     dto.mentorandoId = user.id;
     return this.sessoesService.create(dto);
+  }
+
+  // ── PATCH /sessoes/:id/cancelar ────────────────
+  @Patch(':id/cancelar')
+  @ApiOperation({ summary: 'Cancelar sessão (mentor ou mentorando da sessão)' })
+  @ApiResponse({ status: 200, description: 'Sessão cancelada com motivo registrado' })
+  @ApiResponse({ status: 400, description: 'Sessão já realizada ou cancelada' })
+  @ApiResponse({ status: 403, description: 'Usuário não é participante desta sessão' })
+  @ApiResponse({ status: 404, description: 'Sessão não encontrada' })
+  cancelar(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CancelarSessaoDto,
+    @CurrentUser() user: { id: number },
+  ) {
+    return this.sessoesService.cancelar(id, user.id, dto);
   }
 
   // ── GET /sessoes/minhas ─────────────────────────

@@ -2,7 +2,16 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../services/api'
 
-const TOKEN_KEY = 'mentora_token'
+const TOKEN_KEY     = 'mentora_token'
+const USER_DATA_KEY = 'mentora_user'
+
+interface UserProfile {
+  id: number
+  nome: string
+  email: string
+  tipoUsuario: string
+  avatarUrl: string | null
+}
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -18,7 +27,14 @@ export default function LoginPage() {
     try {
       const { data } = await api.post<{ access_token: string }>('/auth/login', { email, password })
       localStorage.setItem(TOKEN_KEY, data.access_token)
-      navigate('/')
+      const { data: profile } = await api.get<UserProfile>('/auth/profile')
+      localStorage.setItem(USER_DATA_KEY, JSON.stringify(profile))
+      const DESTINOS: Record<string, string> = {
+        mentor:    '/minhas-sessoes',
+        admin:     '/admin/dashboard',
+        mentorando: '/',
+      }
+      navigate(DESTINOS[profile.tipoUsuario] ?? '/')
     } catch {
       setError('Email ou senha inválidos.')
     } finally {

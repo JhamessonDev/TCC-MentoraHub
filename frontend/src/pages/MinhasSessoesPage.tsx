@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { getPublicToken } from '../services/auth'
@@ -52,6 +52,16 @@ const STATUS_LABEL: Record<Sessao['status'], string> = {
   cancelada:  'Cancelada',
 }
 
+const MOTIVOS = [
+  { value: 'conflito_agenda', label: 'Conflito de agenda' },
+  { value: 'problema_tecnico', label: 'Problema técnico' },
+  { value: 'motivo_pessoal', label: 'Motivo pessoal' },
+  { value: 'remarcar', label: 'Preciso remarcar' },
+  { value: 'outros', label: 'Outros' },
+] as const
+
+type MotivoValue = (typeof MOTIVOS)[number]['value']
+
 function formatDateTime(iso: string) {
   const d = new Date(iso)
   return d.toLocaleString('pt-BR', {
@@ -63,6 +73,18 @@ function formatDateTime(iso: string) {
   })
 }
 
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })
+}
+
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+}
+
 function initials(nome: string) {
   const parts = nome.trim().split(' ')
   const first = parts[0]?.[0] ?? ''
@@ -70,7 +92,11 @@ function initials(nome: string) {
   return (first + last).toUpperCase()
 }
 
-function CardMentor({ sessao }: { sessao: Sessao }) {
+const cancelavel = (s: Sessao['status']) => s === 'agendada' || s === 'confirmada'
+
+/* ── Cards ── */
+
+function CardMentor({ sessao, onCancelar }: { sessao: Sessao; onCancelar?: () => void }) {
   const nome = sessao.mentor?.usuario?.nome ?? '—'
   const especialidade = sessao.mentor?.especialidades?.[0]?.nome ?? '—'
 
@@ -91,12 +117,20 @@ function CardMentor({ sessao }: { sessao: Sessao }) {
         <p className="text-purple-400 font-bold text-lg">
           R$ {Number(sessao.valor).toFixed(2)}
         </p>
+        {cancelavel(sessao.status) && onCancelar && (
+          <button
+            onClick={onCancelar}
+            className="flex items-center gap-1 text-xs font-medium text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            ✕ Cancelar sessão
+          </button>
+        )}
       </div>
     </div>
   )
 }
 
-function CardMentorando({ sessao }: { sessao: Sessao }) {
+function CardMentorando({ sessao, onCancelar }: { sessao: Sessao; onCancelar?: () => void }) {
   const nome  = sessao.mentorando?.nome  ?? '—'
   const email = sessao.mentorando?.email ?? '—'
 
@@ -117,10 +151,144 @@ function CardMentorando({ sessao }: { sessao: Sessao }) {
         <p className="text-purple-400 font-bold text-lg">
           R$ {Number(sessao.valor).toFixed(2)}
         </p>
+        {cancelavel(sessao.status) && onCancelar && (
+          <button
+            onClick={onCancelar}
+            className="flex items-center gap-1 text-xs font-medium text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            ✕ Cancelar sessão
+          </button>
+        )}
       </div>
     </div>
   )
 }
+
+/* ── Modal de cancelamento ── */
+
+interface CancelModalProps {
+  sessao: Sessao
+  tipoUsuario: string
+  onClose: () => void
+  onConfirm: (motivo: MotivoValue, observacao: string) => Promise<void>
+}
+
+function CancelModal({ sessao, tipoUsuario, onClose, onConfirm }: CancelModalProps) {
+  const [motivo, setMotivo] = useState<MotivoValue | ''>('')
+  const [observacao, setObservacao] = useState('')
+  const [loading, setLoading] = useState(false)
+  const overlayRef = useRef<HTMLDivElement>(null)
+
+  const nomeOutro = tipoUsuario === 'mentor'
+    ? sessao.mentorando?.nome ?? '—'
+    : sessao.mentor?.usuario?.nome ?? '—'
+
+  const labelOutro = tipoUsuario === 'mentor' ? 'Mentorando' : 'Mentor'
+
+  async function handleConfirm() {
+    if (!motivo) return
+    setLoading(true)
+    try {
+      await onConfirm(motivo, observacao)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function handleOverlayClick(e: React.MouseEvent<HTMLDivElement>) {
+    if (e.target === overlayRef.current) onClose()
+  }
+
+  return (
+    <div
+      ref={overlayRef}
+      onClick={handleOverlayClick}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
+    >
+      <div className="w-full max-w-md bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl p-6 space-y-5">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-white">Cancelar sessão</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-white transition-colors text-xl leading-none"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Session info */}
+        <div className="bg-gray-700/50 border border-gray-600 rounded-xl p-4 space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-gray-400">{labelOutro}</span>
+            <span className="text-white font-medium">{nomeOutro}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-400">Data</span>
+            <span className="text-white">{formatDate(sessao.dataHora)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-400">Horário</span>
+            <span className="text-white">{formatTime(sessao.dataHora)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-400">Duração</span>
+            <span className="text-white">{sessao.duracaoMin} min</span>
+          </div>
+        </div>
+
+        {/* Motivo select */}
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium text-gray-300">
+            Motivo do cancelamento <span className="text-red-400">*</span>
+          </label>
+          <select
+            value={motivo}
+            onChange={(e) => setMotivo(e.target.value as MotivoValue)}
+            className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+          >
+            <option value="" disabled>Selecione um motivo...</option>
+            {MOTIVOS.map((m) => (
+              <option key={m.value} value={m.value}>{m.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Observação */}
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium text-gray-300">Observação</label>
+          <textarea
+            value={observacao}
+            onChange={(e) => setObservacao(e.target.value)}
+            rows={3}
+            placeholder="Detalhes adicionais..."
+            className="w-full bg-gray-700 border border-gray-600 text-white placeholder-gray-500 rounded-lg px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+          />
+        </div>
+
+        {/* Ações */}
+        <div className="flex gap-3 pt-1">
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white transition-colors disabled:opacity-50"
+          >
+            Voltar
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={!motivo || loading}
+            className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-red-700 text-white hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? 'Cancelando…' : 'Confirmar cancelamento'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ── Utilitários de UI ── */
 
 function EmptyState() {
   return (
@@ -164,12 +332,17 @@ function Skeleton() {
   )
 }
 
+/* ── Página principal ── */
+
 export default function MinhasSessoesPage() {
   const navigate = useNavigate()
   const [perfil, setPerfil] = useState<Perfil | null>(null)
   const [sessoes, setSessoes] = useState<Sessao[]>([])
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState('')
+
+  const [modalSessao, setModalSessao] = useState<Sessao | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
 
   useEffect(() => {
     if (!getPublicToken()) {
@@ -194,6 +367,17 @@ export default function MinhasSessoesPage() {
 
     carregar()
   }, [navigate])
+
+  async function handleCancelar(motivo: MotivoValue, observacao: string) {
+    if (!modalSessao) return
+    await api.patch(`/sessoes/${modalSessao.id}/cancelar`, { motivo, observacao })
+    setSessoes((prev) =>
+      prev.map((s) => s.id === modalSessao.id ? { ...s, status: 'cancelada' } : s),
+    )
+    setModalSessao(null)
+    setToast('Sessão cancelada com sucesso')
+    setTimeout(() => setToast(null), 4000)
+  }
 
   const titulo = perfil?.tipoUsuario === 'mentor'
     ? 'Minhas Sessões como Mentor'
@@ -229,12 +413,42 @@ export default function MinhasSessoesPage() {
         ) : (
           <div className="space-y-4">
             {perfil?.tipoUsuario === 'mentor'
-              ? sessoes.map((s) => <CardMentorando key={s.id} sessao={s} />)
-              : sessoes.map((s) => <CardMentor key={s.id} sessao={s} />)
+              ? sessoes.map((s) => (
+                  <CardMentorando
+                    key={s.id}
+                    sessao={s}
+                    onCancelar={() => setModalSessao(s)}
+                  />
+                ))
+              : sessoes.map((s) => (
+                  <CardMentor
+                    key={s.id}
+                    sessao={s}
+                    onCancelar={() => setModalSessao(s)}
+                  />
+                ))
             }
           </div>
         )}
       </div>
+
+      {/* Modal */}
+      {modalSessao && perfil && (
+        <CancelModal
+          sessao={modalSessao}
+          tipoUsuario={perfil.tipoUsuario}
+          onClose={() => setModalSessao(null)}
+          onConfirm={handleCancelar}
+        />
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-green-800 border border-green-600 text-green-100 text-sm font-medium px-4 py-3 rounded-xl shadow-lg">
+          <span>✓</span>
+          <span>{toast}</span>
+        </div>
+      )}
     </div>
   )
 }

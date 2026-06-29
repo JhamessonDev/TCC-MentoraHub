@@ -47,6 +47,7 @@ function StatusBadge({ ativo }: { ativo: boolean }) {
 
 export default function UsuariosAdminPage() {
   const [filtroTipo, setFiltroTipo] = useState<FiltroTipo>('todos')
+  const [toast, setToast] = useState<string | null>(null)
   const queryClient = useQueryClient()
 
   const { data: usuarios = [], isLoading } = useQuery<UsuarioAdmin[]>({
@@ -59,6 +60,10 @@ export default function UsuariosAdminPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-usuarios'] }),
   })
 
+  const resetSenhaMutation = useMutation({
+    mutationFn: (id: number) => api.patch(`/usuarios/${id}/reset-senha`),
+  })
+
   const filtrados = usuarios.filter(
     (u) => filtroTipo === 'todos' || u.tipoUsuario === filtroTipo,
   )
@@ -67,8 +72,24 @@ export default function UsuariosAdminPage() {
     return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(new Date(iso))
   }
 
+  function handleResetSenha(usuario: UsuarioAdmin) {
+    if (!window.confirm(`Redefinir a senha de ${usuario.nome} para Mentora@2026?`)) return
+    resetSenhaMutation.mutate(usuario.id, {
+      onSuccess: () => {
+        setToast(`Senha de ${usuario.nome} redefinida para Mentora@2026`)
+        setTimeout(() => setToast(null), 4000)
+      },
+    })
+  }
+
   return (
     <div className="p-8 space-y-6 bg-gray-900 min-h-full">
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-green-800 border border-green-600 text-green-100 text-sm font-medium px-4 py-3 rounded-xl shadow-lg">
+          <span>✓</span>
+          <span>{toast}</span>
+        </div>
+      )}
       <div>
         <h1 className="text-2xl font-bold text-white">Usuários</h1>
         <p className="text-gray-400 text-sm mt-1">Gerencie os usuários da plataforma</p>
@@ -97,7 +118,7 @@ export default function UsuariosAdminPage() {
                 <th className="text-left text-gray-400 font-medium px-6 py-3">Tipo</th>
                 <th className="text-left text-gray-400 font-medium px-6 py-3">Status</th>
                 <th className="text-left text-gray-400 font-medium px-6 py-3">Cadastro</th>
-                <th className="text-left text-gray-400 font-medium px-6 py-3">Ação</th>
+                <th className="text-left text-gray-400 font-medium px-6 py-3">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-700">
@@ -123,17 +144,28 @@ export default function UsuariosAdminPage() {
                       </td>
                       <td className="px-6 py-4 text-gray-400">{formatDate(usuario.createdAt)}</td>
                       <td className="px-6 py-4">
-                        <button
-                          onClick={() => toggleStatusMutation.mutate(usuario.id)}
-                          disabled={toggleStatusMutation.isPending}
-                          className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors disabled:opacity-50 ${
-                            usuario.ativo
-                              ? 'bg-red-900 text-red-300 hover:bg-red-800'
-                              : 'bg-green-900 text-green-300 hover:bg-green-800'
-                          }`}
-                        >
-                          {usuario.ativo ? 'Desativar' : 'Ativar'}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => toggleStatusMutation.mutate(usuario.id)}
+                            disabled={toggleStatusMutation.isPending}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors disabled:opacity-50 ${
+                              usuario.ativo
+                                ? 'bg-red-900 text-red-300 hover:bg-red-800'
+                                : 'bg-green-900 text-green-300 hover:bg-green-800'
+                            }`}
+                          >
+                            {usuario.ativo ? 'Desativar' : 'Ativar'}
+                          </button>
+                          {usuario.id !== 1 && (
+                            <button
+                              onClick={() => handleResetSenha(usuario)}
+                              disabled={resetSenhaMutation.isPending}
+                              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg text-yellow-400 hover:text-yellow-300 bg-yellow-900/30 hover:bg-yellow-900/50 transition-colors disabled:opacity-50"
+                            >
+                              🔑 Redefinir senha
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

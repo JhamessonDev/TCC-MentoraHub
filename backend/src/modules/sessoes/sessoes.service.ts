@@ -1,10 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { Sessao, StatusSessao } from './sessao.entity';
 import { Mentor } from '../mentores/mentor.entity';
-import { CreateSessaoDto } from './dto/sessao.dto';
+import { CancelarSessaoDto, CreateSessaoDto } from './dto/sessao.dto';
 
 @Injectable()
 export class SessoesService {
@@ -61,6 +61,34 @@ export class SessoesService {
       .leftJoinAndSelect('s.mentorando', 'mentorando')
       .orderBy('s.data_hora', 'DESC')
       .getMany();
+  }
+
+  async cancelar(id: number, usuarioId: number, dto: CancelarSessaoDto): Promise<Sessao> {
+    const sessao = await this.sessaoRepo.findOne({ where: { id } });
+    if (!sessao) throw new NotFoundException(`Sessão com ID ${id} não encontrada`);
+
+    const isMentorando = sessao.mentorandoId === usuarioId;
+    let isMentor = false;
+    if (!isMentorando) {
+      const mentor = await this.mentorRepo.findOne({ where: { usuarioId } });
+      isMentor = !!mentor && mentor.id === sessao.mentorId;
+    }
+
+    if (!isMentorando && !isMentor) {
+      throw new ForbiddenException('Você não tem permissão para cancelar esta sessão');
+    }
+
+    if (sessao.status === StatusSessao.REALIZADA || sessao.status === StatusSessao.CANCELADA) {
+      throw new BadRequestException(`Sessão com status '${sessao.status}' não pode ser cancelada`);
+    }
+
+    const notas = dto.observacao
+      ? `Motivo: ${dto.motivo} | Observação: ${dto.observacao}`
+      : `Motivo: ${dto.motivo}`;
+
+    await this.sessaoRepo.update(id, { status: StatusSessao.CANCELADA, notas });
+
+    return this.sessaoRepo.findOne({ where: { id } }) as Promise<Sessao>;
   }
 
   async getMetricas(periodo: string) {

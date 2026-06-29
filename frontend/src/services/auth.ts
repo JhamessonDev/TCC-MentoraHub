@@ -3,11 +3,12 @@ import {
   ADMIN_TOKEN_KEY,
   ADMIN_USER_KEY,
   PUBLIC_TOKEN_KEY,
+  PUBLIC_USER_KEY,
   getToken,
   getPublicToken,
 } from './tokens'
 
-export { PUBLIC_TOKEN_KEY, getToken, getPublicToken }
+export { PUBLIC_TOKEN_KEY, PUBLIC_USER_KEY, getToken, getPublicToken }
 
 export interface AuthUser {
   id: number
@@ -41,6 +42,16 @@ export function isPublicAuthenticated(): boolean {
 
 export function getCurrentUser(): AuthUser | null {
   const raw = localStorage.getItem(ADMIN_USER_KEY)
+  if (!raw) return null
+  try {
+    return JSON.parse(raw) as AuthUser
+  } catch {
+    return null
+  }
+}
+
+export function getCurrentUserData(): AuthUser | null {
+  const raw = localStorage.getItem(PUBLIC_USER_KEY)
   if (!raw) return null
   try {
     return JSON.parse(raw) as AuthUser

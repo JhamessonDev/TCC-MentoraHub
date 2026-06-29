@@ -50,6 +50,17 @@ export class UsuariosService {
     });
   }
 
+  async resetSenha(id: number): Promise<{ message: string }> {
+    const usuario = await this.usuarioRepo.findOne({ where: { id } });
+    if (!usuario) throw new NotFoundException(`Usuário com ID ${id} não encontrado`);
+
+    const senhaHash = await bcrypt.hash('Mentora@2026', 10);
+    await this.usuarioRepo.update(id, { senha: senhaHash });
+
+    this.logger.info('Senha redefinida pelo admin', { usuarioId: id, context: 'UsuariosService' });
+    return { message: 'Senha redefinida para Mentora@2026' };
+  }
+
   async toggleStatus(id: number): Promise<UsuarioSemSenha> {
     const usuario = await this.usuarioRepo.findOne({ where: { id } });
     if (!usuario) throw new NotFoundException(`Usuário com ID ${id} não encontrado`);

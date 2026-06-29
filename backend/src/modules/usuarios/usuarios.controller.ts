@@ -39,6 +39,20 @@ export class UsuariosController {
     return this.usuariosService.findAll();
   }
 
+  // ── PATCH /usuarios/:id/reset-senha — somente admin ──
+  @Patch(':id/reset-senha')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Redefinir senha de usuário para Mentora@2026 (admin)' })
+  @ApiResponse({ status: 200, description: 'Senha redefinida com sucesso' })
+  @ApiResponse({ status: 404, description: 'Usuário não encontrado' })
+  @ApiResponse({ status: 403, description: 'Acesso negado' })
+  resetSenha(@Param('id', ParseIntPipe) id: number) {
+    return this.usuariosService.resetSenha(id);
+  }
+
   // ── PATCH /usuarios/:id/status — somente admin ──
   @Patch(':id/status')
   @UseGuards(JwtAuthGuard, RolesGuard)

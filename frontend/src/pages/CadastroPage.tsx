@@ -1,7 +1,16 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import api from '../services/api'
 
 type TipoUsuario = 'mentorando' | 'mentor'
+
+interface UserProfile {
+  id: number
+  nome: string
+  email: string
+  tipoUsuario: string
+  avatarUrl: string | null
+}
 
 export default function CadastroPage() {
   const [searchParams] = useSearchParams()
@@ -59,7 +68,13 @@ export default function CadastroPage() {
       if (loginRes.ok) {
         const { access_token } = await loginRes.json() as { access_token: string }
         localStorage.setItem('mentora_token', access_token)
-        navigate('/')
+        try {
+          const { data: profile } = await api.get<UserProfile>('/auth/profile')
+          localStorage.setItem('mentora_user', JSON.stringify(profile))
+          navigate(profile.tipoUsuario === 'mentor' ? '/minhas-sessoes' : '/')
+        } catch {
+          navigate('/')
+        }
       } else {
         navigate('/login')
       }

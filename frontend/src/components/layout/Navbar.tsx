@@ -1,11 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { PUBLIC_TOKEN_KEY, isPublicAuthenticated } from '../../services/auth'
+import { PUBLIC_TOKEN_KEY, PUBLIC_USER_KEY, getCurrentUserData, isPublicAuthenticated } from '../../services/auth'
 import api from '../../services/api'
 
 interface Perfil {
+  id: number
   nome: string
   email: string
+  tipoUsuario: string
+  avatarUrl: string | null
+}
+
+const TIPO_BADGE: Record<string, { label: string; cls: string }> = {
+  mentorando: { label: 'Mentorando', cls: 'bg-green-100 text-green-700' },
+  mentor:     { label: 'Mentor',     cls: 'bg-blue-100  text-blue-700'  },
+  admin:      { label: 'Admin',      cls: 'bg-purple-100 text-purple-700' },
 }
 
 export default function Navbar() {
@@ -16,12 +25,18 @@ export default function Navbar() {
   const [loggedIn, setLoggedIn] = useState(isPublicAuthenticated)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [perfil, setPerfil] = useState<Perfil | null>(null)
+  const [tipoUsuario, setTipoUsuario] = useState<string | null>(
+    () => getCurrentUserData()?.tipoUsuario ?? null,
+  )
 
   // Re-check auth on every route change (handles post-login redirect)
   useEffect(() => {
     const authed = isPublicAuthenticated()
     setLoggedIn(authed)
-    if (!authed) setPerfil(null)
+    if (!authed) {
+      setPerfil(null)
+      setTipoUsuario(null)
+    }
   }, [location.pathname])
 
   // Cross-tab logout/login sync
@@ -30,7 +45,10 @@ export default function Navbar() {
       if (e.key !== PUBLIC_TOKEN_KEY) return
       const authed = !!e.newValue
       setLoggedIn(authed)
-      if (!authed) setPerfil(null)
+      if (!authed) {
+        setPerfil(null)
+        setTipoUsuario(null)
+      }
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
@@ -40,10 +58,15 @@ export default function Navbar() {
   useEffect(() => {
     if (!loggedIn) return
     api.get<Perfil>('/auth/profile')
-      .then(({ data }) => setPerfil(data))
+      .then(({ data }) => {
+        setPerfil(data)
+        setTipoUsuario(data.tipoUsuario)
+        localStorage.setItem(PUBLIC_USER_KEY, JSON.stringify(data))
+      })
       .catch(() => {
         // Token inválido ou expirado — desloga silenciosamente
         localStorage.removeItem(PUBLIC_TOKEN_KEY)
+        localStorage.removeItem(PUBLIC_USER_KEY)
         setLoggedIn(false)
       })
   }, [loggedIn])
@@ -61,8 +84,10 @@ export default function Navbar() {
 
   function handleLogout() {
     localStorage.removeItem(PUBLIC_TOKEN_KEY)
+    localStorage.removeItem(PUBLIC_USER_KEY)
     setLoggedIn(false)
     setPerfil(null)
+    setTipoUsuario(null)
     setDropdownOpen(false)
     navigate('/')
   }
@@ -134,10 +159,18 @@ export default function Navbar() {
 
                 {dropdownOpen && (
                   <div className="absolute right-0 mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-lg py-1 z-50">
-                    {/* Cabeçalho com nome e email */}
+                    {/* Cabeçalho com nome, email e badge de tipo */}
                     <div className="px-4 py-3 border-b border-gray-100">
                       <p className="text-sm font-semibold text-gray-800 truncate">{perfil?.nome ?? '…'}</p>
                       <p className="text-xs text-gray-400 truncate mt-0.5">{perfil?.email ?? '…'}</p>
+                      {tipoUsuario && (() => {
+                        const badge = TIPO_BADGE[tipoUsuario]
+                        return badge ? (
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium mt-1.5 ${badge.cls}`}>
+                            {badge.label}
+                          </span>
+                        ) : null
+                      })()}
                     </div>
 
                     {/* Minhas Sessões */}

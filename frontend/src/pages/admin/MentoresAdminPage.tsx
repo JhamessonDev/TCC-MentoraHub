@@ -17,6 +17,7 @@ function StatusBadge({ aprovado }: { aprovado: boolean }) {
 
 export default function MentoresAdminPage() {
   const [busca, setBusca] = useState('')
+  const [toast, setToast] = useState<string | null>(null)
   const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery<PaginatedResponse<Mentor>>({
@@ -31,6 +32,10 @@ export default function MentoresAdminPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-mentores-list'] }),
   })
 
+  const resetSenhaMutation = useMutation({
+    mutationFn: (usuarioId: number) => api.patch(`/usuarios/${usuarioId}/reset-senha`),
+  })
+
   const mentores = (data?.data ?? []).filter((m) =>
     m.usuario.nome.toLowerCase().includes(busca.toLowerCase()),
   )
@@ -41,8 +46,24 @@ export default function MentoresAdminPage() {
     )
   }
 
+  function handleResetSenha(mentor: Mentor) {
+    if (!window.confirm(`Redefinir a senha de ${mentor.usuario.nome} para Mentora@2026?`)) return
+    resetSenhaMutation.mutate(mentor.usuarioId, {
+      onSuccess: () => {
+        setToast(`Senha de ${mentor.usuario.nome} redefinida para Mentora@2026`)
+        setTimeout(() => setToast(null), 4000)
+      },
+    })
+  }
+
   return (
     <div className="p-8 space-y-6 bg-gray-900 min-h-full">
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-green-800 border border-green-600 text-green-100 text-sm font-medium px-4 py-3 rounded-xl shadow-lg">
+          <span>✓</span>
+          <span>{toast}</span>
+        </div>
+      )}
       <div>
         <h1 className="text-2xl font-bold text-white">Mentores</h1>
         <p className="text-gray-400 text-sm mt-1">Gerencie os mentores da plataforma</p>
@@ -69,7 +90,7 @@ export default function MentoresAdminPage() {
                 <th className="text-left text-gray-400 font-medium px-6 py-3">Avaliação</th>
                 <th className="text-left text-gray-400 font-medium px-6 py-3">Sessões</th>
                 <th className="text-left text-gray-400 font-medium px-6 py-3">Status</th>
-                <th className="text-left text-gray-400 font-medium px-6 py-3">Ação</th>
+                <th className="text-left text-gray-400 font-medium px-6 py-3">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-700">
@@ -98,27 +119,38 @@ export default function MentoresAdminPage() {
                         <StatusBadge aprovado={mentor.aprovado} />
                       </td>
                       <td className="px-6 py-4">
-                        {mentor.aprovado ? (
-                          <button
-                            onClick={() =>
-                              aprovarMutation.mutate({ id: mentor.id, aprovado: false })
-                            }
-                            disabled={aprovarMutation.isPending}
-                            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-900 text-red-300 hover:bg-red-800 transition-colors disabled:opacity-50"
-                          >
-                            Revogar
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() =>
-                              aprovarMutation.mutate({ id: mentor.id, aprovado: true })
-                            }
-                            disabled={aprovarMutation.isPending}
-                            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-900 text-green-300 hover:bg-green-800 transition-colors disabled:opacity-50"
-                          >
-                            Aprovar
-                          </button>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {mentor.aprovado ? (
+                            <button
+                              onClick={() =>
+                                aprovarMutation.mutate({ id: mentor.id, aprovado: false })
+                              }
+                              disabled={aprovarMutation.isPending}
+                              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-900 text-red-300 hover:bg-red-800 transition-colors disabled:opacity-50"
+                            >
+                              Revogar
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() =>
+                                aprovarMutation.mutate({ id: mentor.id, aprovado: true })
+                              }
+                              disabled={aprovarMutation.isPending}
+                              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-900 text-green-300 hover:bg-green-800 transition-colors disabled:opacity-50"
+                            >
+                              Aprovar
+                            </button>
+                          )}
+                          {mentor.usuarioId !== 1 && (
+                            <button
+                              onClick={() => handleResetSenha(mentor)}
+                              disabled={resetSenhaMutation.isPending}
+                              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg text-yellow-400 hover:text-yellow-300 bg-yellow-900/30 hover:bg-yellow-900/50 transition-colors disabled:opacity-50"
+                            >
+                              🔑 Redefinir senha
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
